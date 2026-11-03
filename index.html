@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Medicare Lab</title>
+<style>
+:root{--bg:#f4f7f6;--surf:#fff;--ink:#12302f;--mute:#5d7776;--line:#d6e2e0;--pri:#0e6b66;--pri-ink:#fff;--acc:#f2b84b;--bad:#b3261e;--good:#1b7a3d;box-sizing:border-box}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1b1a;--surf:#142928;--ink:#e6f2f0;--mute:#8fb0ad;--line:#254342;--pri:#3fb5ad;--pri-ink:#06201f;--bad:#ff8a80;--good:#6fd68f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:760px;margin:0 auto;padding:0 16px}
+header{background:var(--pri);color:var(--pri-ink);padding:16px 0}
+header .wrap{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.brand{font-size:24px;font-weight:700}header small{display:block;opacity:.9}
+input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:inherit;font:inherit}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
+label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
+.btn{border:0;border-radius:10px;background:var(--pri);color:var(--pri-ink);padding:10px 16px;font-weight:600;cursor:pointer;display:inline-block;text-align:center}
+.btn.ghost{background:transparent;color:var(--pri);border:1px solid var(--pri)}
+.btn.sm{padding:6px 12px;font-size:14px}.btn.red{background:var(--bad);color:#fff}.btn.go{background:var(--good);color:#fff}
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:14px 0 6px}
+.chip{flex:none;border:1px solid var(--line);background:var(--surf);border-radius:20px;padding:6px 14px;cursor:pointer;font-size:14px}
+.chip.on{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+.card,.bk,.test{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+.test{display:flex;align-items:center;gap:12px}.test .n{flex:1;min-width:0}.test small,.bk small{color:var(--mute)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>.g{flex:1;min-width:120px}
+.pay{background:var(--acc);color:#2b2000;border-radius:10px;padding:10px 14px;margin:12px 0;font-weight:600;font-size:14px}
+.badge{display:inline-block;border-radius:12px;padding:1px 10px;font-size:13px;border:1px solid var(--line)}
+.badge.paid{color:var(--good);border-color:var(--good)}.badge.due{color:var(--bad);border-color:var(--bad)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stats .card{margin:0}.stats b{font-size:24px;display:block}
+.sum div{display:flex;justify-content:space-between;gap:10px}.tot{font-weight:700;border-top:1px dashed var(--line);margin-top:6px;padding-top:6px}
+.err{color:var(--bad);font-size:14px;margin-top:8px}.empty{color:var(--mute);text-align:center;padding:24px 0}
+.tbl{display:grid;grid-template-columns:1fr 90px 80px 36px;gap:6px;margin:6px 0;align-items:center}
+#toasts{position:fixed;top:calc(10px + env(safe-area-inset-top,0px));left:10px;right:10px;z-index:20;pointer-events:none}
+.toast{background:var(--ink);color:var(--bg);border-radius:10px;padding:12px 14px;margin-bottom:8px;max-width:520px;margin-inline:auto;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+@media print{header,.tabs,.btn{display:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div><div id="toasts" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+/* ===== 1. Paste your Supabase details here ===== */
+const CFG={url:"https://zazhxcritmgjxfopjnzq.supabase.co",key:"sb_publishable_bkl9-vdu_1Wg0HPmG4cJcA_zIV7PYYo"};
+/* ===== 2. Lab details (address and numbers) ===== */
+const LAB={name:"Medicare Lab",address:"Mankera",phone:"03011306708",hours:"Mon–Sat 8:00 AM – 9:00 PM"};
+
+const sb=supabase.createClient(CFG.url,CFG.key);
+const $=s=>document.querySelector(s),app=$("#app");
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const rs=n=>"Rs "+Number(n||0).toLocaleString("en-IN");
+let me,prof,tests=[],bks=[],cart=[],tab="",mode="login",term="",flt="All",chan;
+const isStaff=()=>prof&&prof.role==="staff";
+
+function toast(m){const t=document.createElement("div");t.className="toast";t.textContent=m;$("#toasts").appendChild(t);setTimeout(()=>t.remove(),6000)}
+function notify(m){toast(m);try{const c=new AudioContext(),o=c.createOscillator();o.connect(c.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();c.close()},220)}catch(e){}
+ try{if(Notification.permission==="granted")new Notification(LAB.name,{body:m})}catch(e){}}
+
+/* ---------- auth ---------- */
+function authView(msg){
+ app.innerHTML=`<header><div class="wrap"><div><div class="brand">${esc(LAB.name)}</div><small>${esc(LAB.address)}</small></div></div></header>
+ <div class="wrap"><div class="pay">Payment: cash at the lab only.</div>
+ <div class="tabs"><button class="chip ${mode=="login"?"on":""}" data-a="mode" data-v="login">Login</button><button class="chip ${mode=="signup"?"on":""}" data-a="mode" data-v="signup">Create account</button></div>
+ <div class="card">${mode=="signup"?`<label for="aN">Full name</label><input id="aN" autocomplete="name"><label for="aP">Phone number</label><input id="aP" type="tel" inputmode="tel" autocomplete="tel">`:""}
+ <label for="aE">Email</label><input id="aE" type="email" autocomplete="email"><label for="aW">Password (min 6 characters)</label><input id="aW" type="password" autocomplete="${mode=="login"?"current-password":"new-password"}">
+ <div class="err" id="aErr">${esc(msg||"")}</div><p><button class="btn" data-a="auth">${mode=="login"?"Login":"Create account"}</button></p></div></div>`}
+async function doAuth(){
+ const email=$("#aE").value.trim(),password=$("#aW").value;let r;
+ if(!email||password.length<6)return authView("Enter your email and a password of at least 6 characters.");
+ if(mode=="signup"){const name=$("#aN").value.trim(),phone=$("#aP").value.trim();
+  if(!name||phone.replace(/\D/g,"").length<10)return authView("Enter your name and a valid phone number.");
+  r=await sb.auth.signUp({email,password,options:{data:{name,phone}}});
+  if(!r.error&&!r.data.session){mode="login";return authView("Account created. Check your email to confirm, then login.")}}
+ else r=await sb.auth.signInWithPassword({email,password});
+ if(r.error)return authView(r.error.message);
+ boot(r.data.session.user)}
+
+/* ---------- boot ---------- */
+async function boot(user){
+ me=user;const p=await sb.from("profiles").select("*").eq("id",me.id).single();prof=p.data||{name:"",phone:"",role:"patient"};
+ await Promise.all([loadTests(),loadBks()]);tab=isStaff()?"bookings":"book";
+ if(chan)sb.removeChannel(chan);
+ chan=sb.channel("bk").on("postgres_changes",{event:"*",schema:"public",table:"bookings"},async p=>{
+  await loadBks();
+  if(isStaff()&&p.eventType=="INSERT")notify("New booking "+p.new.code+" from "+p.new.patient_name);
+  else if(!isStaff()&&p.eventType=="UPDATE"&&p.new.user_id==me.id)notify(p.new.report_path&&!p.old.report_path?"Your report is ready ("+p.new.code+")":"Your booking "+p.new.code+" was updated");
+  main()}).subscribe();
+ main();regPush()}
+async function loadTests(){const r=await sb.from("tests").select("*").order("cat").order("name");tests=r.data||[]}
+async function loadBks(){const r=await sb.from("bookings").select("*").order("created_at",{ascending:false});bks=r.data||[]}
+
+/* ---------- background push (works only inside the Android app) ---------- */
+async function regPush(){
+ const P=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.PushNotifications;if(!P||!isStaff())return;
+ try{const r=await P.requestPermissions();if(r.receive!=="granted")return toast("Allow notifications to get booking alerts.");
+  try{await P.createChannel({id:"bookings",name:"New bookings",importance:5,sound:"default"})}catch(x){}
+  P.addListener("registration",async t=>{await sb.from("device_tokens").upsert({token:t.value,user_id:me.id,updated_at:new Date().toISOString()})});
+  P.addListener("pushNotificationReceived",n=>toast((n.title||"")+" "+(n.body||"")));
+  await P.register()}catch(x){}}
+addEventListener("offline",()=>toast("You are offline. Reconnect to see new bookings."));
+addEventListener("online",()=>{toast("Back online.");if(me)loadBks().then(main)});
+
+/* ---------- shell ---------- */
+function main(){
+ const T=isStaff()?[["bookings","Bookings"],["payments","Payments"],["tests","Tests"]]:[["book","Book tests"],["mine","My bookings"]];
+ const due=bks.filter(b=>!b.paid&&b.status!="Cancelled").length;
+ app.innerHTML=`<header><div class="wrap"><div><div class="brand">${esc(LAB.name)}</div><small>${esc(prof.name||me.email)}${isStaff()?" · Staff":""}</small></div><button class="btn ghost sm" style="color:inherit;border-color:currentColor" data-a="out">Logout</button></div></header>
+ <div class="wrap"><div class="tabs">${T.map(t=>`<button class="chip ${tab==t[0]?"on":""}" data-a="tab" data-v="${t[0]}">${t[1]}${t[0]=="payments"&&due?" ("+due+")":""}</button>`).join("")}</div><div id="view"></div></div>`;
+ ({book:vBook,mine:vMine,bookings:vBookings,payments:vPay,tests:vTests})[tab]()}
+
+/* ---------- patient ---------- */
+function drawTests(){const q=term.toLowerCase(),l=tests.filter(t=>(t.name+t.cat).toLowerCase().includes(q));
+ $("#tl").innerHTML=l.length?l.map(t=>{const on=cart.includes(t.id);return`<div class="test"><div class="n"><b>${esc(t.name)}</b><br><small>${esc(t.cat)}</small></div><b>${rs(t.price)}</b><button class="btn sm ${on?"ghost":""}" data-a="cart" data-v="${t.id}">${on?"Remove":"Add"}</button></div>`}).join(""):'<div class="empty">No test found.</div>'}
+function vBook(){
+ const sel=tests.filter(t=>cart.includes(t.id)),tot=sel.reduce((a,t)=>a+Number(t.price),0),d=new Date(),today=new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+ const slots=[];for(let h=8;h<21;h++)slots.push((h>12?h-12:h)+":00 "+(h<12?"AM":"PM"));
+ $("#view").innerHTML=`<div class="pay">Pay cash at the lab when you visit. No online payment.</div><input id="q" type="search" placeholder="Search tests" value="${esc(term)}" aria-label="Search tests"><div id="tl"></div>
+ ${sel.length?`<div class="card"><h3 style="margin:0 0 8px">Your booking</h3><div class="sum">${sel.map(t=>`<div><span>${esc(t.name)}</span><span>${rs(t.price)}</span></div>`).join("")}<div class="tot"><span>Total (cash at lab)</span><span>${rs(tot)}</span></div></div>
+ <label for="bN">Patient name</label><input id="bN" value="${esc(prof.name)}"><label for="bP">Phone</label><input id="bP" type="tel" value="${esc(prof.phone)}">
+ <div class="row"><div class="g"><label for="bA">Age</label><input id="bA" type="number" inputmode="numeric"></div><div class="g"><label for="bG">Gender</label><select id="bG"><option>Female</option><option>Male</option><option>Other</option></select></div></div>
+ <div class="row"><div class="g"><label for="bD">Visit date</label><input id="bD" type="date" min="${today}" value="${today}"></div><div class="g"><label for="bT">Time</label><select id="bT">${slots.map(s=>`<option>${s}</option>`).join("")}</select></div></div>
+ <label for="bC">Note (optional)</label><input id="bC"><div class="err" id="bE"></div><p><button class="btn" data-a="book">Confirm booking</button></p></div>`:""}`;
+ drawTests();$("#q").oninput=e=>{term=e.target.value;drawTests()}}
+async function doBook(){
+ const sel=tests.filter(t=>cart.includes(t.id)),name=$("#bN").value.trim(),phone=$("#bP").value.trim();
+ if(!name||phone.replace(/\D/g,"").length<10||!$("#bD").value)return $("#bE").textContent="Enter name, a valid phone number and the visit date.";
+ const code="ML-"+Math.random().toString(36).slice(2,7).toUpperCase();
+ const r=await sb.from("bookings").insert({code,user_id:me.id,patient_name:name,phone,age:$("#bA").value,gender:$("#bG").value,visit_date:$("#bD").value,visit_time:$("#bT").value,note:$("#bC").value.trim(),tests:sel.map(t=>({name:t.name,price:Number(t.price)})),total:sel.reduce((a,t)=>a+Number(t.price),0)});
+ if(r.error)return $("#bE").textContent=r.error.message;
+ cart=[];await loadBks();tab="mine";main();toast("Booking "+code+" confirmed. Pay cash at the lab.")}
+function card(b,staff){
+ const rep=b.report_path?`<button class="btn sm go" data-a="rep" data-v="${esc(b.report_path)}">View report</button>`:"";
+ return`<div class="bk"><div class="row"><b class="g">${esc(b.code)}</b><span class="badge">${esc(b.status)}</span><span class="badge ${b.paid?"paid":"due"}">${b.paid?"Paid":"Payment pending"}</span></div>
+ <div>${esc(b.patient_name)} · ${esc(b.phone)}${b.age?" · "+esc(b.age)+" yrs":""}</div><div>${esc(b.visit_date)}, ${esc(b.visit_time)} · <b>${rs(b.total)}</b></div>
+ <small>${(b.tests||[]).map(t=>esc(t.name)).join(", ")}${b.note?" — Note: "+esc(b.note):""}</small>
+ ${staff?`<div class="row" style="margin-top:8px"><button class="btn sm ${b.paid?"ghost":"go"}" data-a="paid" data-v="${b.id}">${b.paid?"Mark unpaid":"Cash received"}</button>
+ <select style="width:auto" data-ch="st" data-v="${b.id}" aria-label="Status">${["Pending","Visited","Report ready","Cancelled"].map(s=>`<option ${s==b.status?"selected":""}>${s}</option>`).join("")}</select>
+ <label class="btn sm ghost" style="margin:0;color:var(--pri)">${b.report_path?"Replace report":"Upload report"}<input type="file" hidden accept=".pdf,image/*" data-ch="up" data-v="${b.id}"></label>${rep}
+ <button class="btn sm red" data-a="del" data-v="${b.id}">Delete</button></div>`:`<div class="row" style="margin-top:8px">${rep||"<small>Report not uploaded yet.</small>"}</div>`}</div>`}
+function vMine(){$("#view").innerHTML=bks.length?bks.map(b=>card(b,false)).join(""):'<div class="empty">No bookings yet.</div>'}
+
+/* ---------- staff ---------- */
+function vBookings(){
+ const l=bks.filter(b=>flt=="All"||(flt=="Unpaid"&&!b.paid)||(flt=="Paid"&&b.paid)||(flt=="Report due"&&!b.report_path&&b.status!="Cancelled"));
+ $("#view").innerHTML=`<div class="row"><button class="btn ghost sm" data-a="alerts">Enable phone alerts</button></div><div class="tabs">${["All","Unpaid","Paid","Report due"].map(f=>`<button class="chip ${flt==f?"on":""}" data-a="flt" data-v="${f}">${f}</button>`).join("")}</div>${l.length?l.map(b=>card(b,true)).join(""):'<div class="empty">No bookings here.</div>'}`}
+function vPay(){
+ const ok=bks.filter(b=>b.status!="Cancelled"),pd=ok.filter(b=>b.paid),du=ok.filter(b=>!b.paid),s=a=>a.reduce((x,b)=>x+Number(b.total),0);
+ $("#view").innerHTML=`<div class="stats"><div class="card"><b>${pd.length}</b>Payments done<br><small>${rs(s(pd))} collected</small></div><div class="card"><b>${du.length}</b>Payments pending<br><small>${rs(s(du))} to collect</small></div></div>
+ <h3>Pending</h3>${du.length?du.map(b=>card(b,true)).join(""):'<div class="empty">Nothing pending.</div>'}`}
+function vTests(){
+ $("#view").innerHTML=`<div class="tbl"><small>Test</small><small>Category</small><small>Price</small><span></span></div>${tests.map(t=>`<div class="tbl"><input data-ch="te" data-f="name" data-v="${t.id}" value="${esc(t.name)}" aria-label="Test name"><input data-ch="te" data-f="cat" data-v="${t.id}" value="${esc(t.cat)}" aria-label="Category"><input data-ch="te" data-f="price" data-v="${t.id}" type="number" value="${t.price}" aria-label="Price"><button class="btn red sm" data-a="dt" data-v="${t.id}" aria-label="Delete test">×</button></div>`).join("")}
+ <div class="tbl"><input id="nN" placeholder="New test"><input id="nC" placeholder="Category"><input id="nP" type="number" placeholder="Price"><button class="btn sm" data-a="addt" aria-label="Add test">+</button></div>`}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+ const el=e.target.closest("[data-a]");if(!el)return;const a=el.dataset.a,v=el.dataset.v;
+ if(a=="mode"){mode=v;authView()}else if(a=="auth")doAuth();
+ else if(a=="out"){await sb.auth.signOut();me=null;authView()}
+ else if(a=="tab"){tab=v;main()}else if(a=="flt"){flt=v;vBookings()}
+ else if(a=="cart"){cart.includes(v)?cart=cart.filter(x=>x!=v):cart.push(v);vBook()}
+ else if(a=="book")doBook();
+ else if(a=="alerts"){try{const p=await Notification.requestPermission();toast(p=="granted"?"Phone alerts enabled.":"Alerts blocked in browser settings.")}catch(x){toast("Alerts not supported on this browser.")}}
+ else if(a=="paid"){const b=bks.find(x=>x.id==v);await sb.from("bookings").update({paid:!b.paid,paid_at:b.paid?null:new Date().toISOString()}).eq("id",v);await loadBks();main()}
+ else if(a=="del"){if(confirm("Delete this booking?")){await sb.from("bookings").delete().eq("id",v);await loadBks();main()}}
+ else if(a=="rep"){const r=await sb.storage.from("reports").createSignedUrl(v,300);r.data?location.href=r.data.signedUrl:toast("Could not open report.")}
+ else if(a=="addt"){const n=$("#nN").value.trim();if(!n)return;await sb.from("tests").insert({name:n,cat:$("#nC").value.trim()||"Other",price:Number($("#nP").value)||0});await loadTests();vTests()}
+ else if(a=="dt"){if(confirm("Delete this test?")){await sb.from("tests").delete().eq("id",v);await loadTests();vTests()}}});
+document.addEventListener("change",async e=>{
+ const el=e.target.closest("[data-ch]");if(!el)return;const k=el.dataset.ch,v=el.dataset.v;
+ if(k=="st"){await sb.from("bookings").update({status:el.value}).eq("id",v);await loadBks()}
+ else if(k=="te"){const f=el.dataset.f;await sb.from("tests").update({[f]:f=="price"?Number(el.value)||0:el.value.trim()}).eq("id",v);await loadTests()}
+ else if(k=="up"){const file=el.files[0],b=bks.find(x=>x.id==v);if(!file)return;toast("Uploading report…");
+  const path=b.user_id+"/"+b.code+"-"+Date.now()+"-"+file.name.replace(/[^\w.\-]/g,"_");
+  const u=await sb.storage.from("reports").upload(path,file,{upsert:true});if(u.error)return toast("Upload failed: "+u.error.message);
+  await sb.from("bookings").update({report_path:path,status:"Report ready"}).eq("id",v);await loadBks();main();toast("Report uploaded. The patient will be notified.")}});
+
+(async()=>{if(CFG.url.startsWith("PASTE")){app.innerHTML='<div class="wrap"><div class="card">Add your Supabase URL and key in index.html first.</div></div>';return}
+ const s=await sb.auth.getSession();s.data.session?boot(s.data.session.user):authView()})();
+</script>
+</body>
+</html>
