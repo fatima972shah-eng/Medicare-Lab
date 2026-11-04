@@ -4,15 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Medicare Lab</title>
+<meta name="theme-color" content="#0b2a5b">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
-:root{--bg:#f4f7f6;--surf:#fff;--ink:#12302f;--mute:#5d7776;--line:#d6e2e0;--pri:#0e6b66;--pri-ink:#fff;--acc:#f2b84b;--bad:#b3261e;--good:#1b7a3d;box-sizing:border-box}
+:root{--bg:#f4f7f6;--surf:#fff;--ink:#12302f;--mute:#5d7776;--line:#d6e2e0;--pri:#0b2a5b;--pri-ink:#fff;--teal:#138a8a;--acc:#f2b84b;--bad:#b3261e;--good:#1b7a3d;box-sizing:border-box}
 @media(prefers-color-scheme:dark){:root{--bg:#0d1b1a;--surf:#142928;--ink:#e6f2f0;--mute:#8fb0ad;--line:#254342;--pri:#3fb5ad;--pri-ink:#06201f;--bad:#ff8a80;--good:#6fd68f}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 .wrap{max-width:760px;margin:0 auto;padding:0 16px}
-header{background:var(--pri);color:var(--pri-ink);padding:16px 0}
+header{background:#fff;color:#0b2a5b;border-bottom:4px solid var(--teal);padding:8px 0}
 header .wrap{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.brand{font-size:24px;font-weight:700}header small{display:block;opacity:.9}
+.logo{height:64px;width:auto;display:block}.biglogo{width:min(260px,70vw);height:auto;border-radius:12px;background:#fff}header small{display:block;color:#5d7776}
 input,select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surf);color:inherit;font:inherit}
 button{font:inherit;color:inherit}
 :focus-visible{outline:3px solid var(--acc);outline-offset:1px}
@@ -40,13 +43,9 @@ label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
 </head>
 <body>
 <div id="app"></div><div id="toasts" aria-live="polite"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
 <script>
-/* ===== 1. Paste your Supabase details here ===== */
-const CFG={url:"https://zazhxcritmgjxfopjnzq.supabase.co",key:"sb_publishable_bkl9-vdu_1Wg0HPmG4cJcA_zIV7PYYo"};
-/* ===== 2. Lab details (address and numbers) ===== */
-const LAB={name:"Medicare Lab",address:"Mankera",phone:"03011306708",hours:"Mon–Sat 8:00 AM – 9:00 PM"};
-
 const sb=supabase.createClient(CFG.url,CFG.key);
 const $=s=>document.querySelector(s),app=$("#app");
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -60,7 +59,7 @@ function notify(m){toast(m);try{const c=new AudioContext(),o=c.createOscillator(
 
 /* ---------- auth ---------- */
 function authView(msg){
- app.innerHTML=`<header><div class="wrap"><div><div class="brand">${esc(LAB.name)}</div><small>${esc(LAB.address)}</small></div></div></header>
+ app.innerHTML=`<div class="wrap" style="text-align:center;padding-top:20px"><img class="biglogo" src="logo.jpg" alt="${esc(LAB.name)}"><div style="color:var(--mute);font-size:14px;margin-top:6px">${esc(LAB.address)}</div></div>
  <div class="wrap"><div class="pay">Payment: cash at the lab only.</div>
  <div class="tabs"><button class="chip ${mode=="login"?"on":""}" data-a="mode" data-v="login">Login</button><button class="chip ${mode=="signup"?"on":""}" data-a="mode" data-v="signup">Create account</button></div>
  <div class="card">${mode=="signup"?`<label for="aN">Full name</label><input id="aN" autocomplete="name"><label for="aP">Phone number</label><input id="aP" type="tel" inputmode="tel" autocomplete="tel">`:""}
@@ -106,7 +105,7 @@ addEventListener("online",()=>{toast("Back online.");if(me)loadBks().then(main)}
 function main(){
  const T=isStaff()?[["bookings","Bookings"],["payments","Payments"],["tests","Tests"]]:[["book","Book tests"],["mine","My bookings"]];
  const due=bks.filter(b=>!b.paid&&b.status!="Cancelled").length;
- app.innerHTML=`<header><div class="wrap"><div><div class="brand">${esc(LAB.name)}</div><small>${esc(prof.name||me.email)}${isStaff()?" · Staff":""}</small></div><button class="btn ghost sm" style="color:inherit;border-color:currentColor" data-a="out">Logout</button></div></header>
+ app.innerHTML=`<header><div class="wrap"><div><img class="logo" src="logo.jpg" alt="${esc(LAB.name)}"><small>${esc(prof.name||me.email)}${isStaff()?" · Staff":""}</small></div><button class="btn ghost sm" data-a="out">Logout</button></div></header>
  <div class="wrap"><div class="tabs">${T.map(t=>`<button class="chip ${tab==t[0]?"on":""}" data-a="tab" data-v="${t[0]}">${t[1]}${t[0]=="payments"&&due?" ("+due+")":""}</button>`).join("")}</div><div id="view"></div></div>`;
  ({book:vBook,mine:vMine,bookings:vBookings,payments:vPay,tests:vTests})[tab]()}
 
